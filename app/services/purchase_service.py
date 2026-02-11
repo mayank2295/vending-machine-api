@@ -6,20 +6,24 @@ from app.models import Item
 
 
 def purchase(db: Session, item_id: str, cash_inserted: int) -> dict:
-    item = db.query(Item).filter(Item.id == item_id).first()
+    item = db.query(Item).with_for_update().filter(Item.id == item_id).first()
     if not item:
         raise ValueError("item_not_found")
-    time.sleep(0.05)  # demo: widens race window for concurrent purchase/restock
+    
     if item.quantity <= 0:
         raise ValueError("out_of_stock")
+    
     if cash_inserted < item.price:
         raise ValueError("insufficient_cash", item.price, cash_inserted)
-    # No validation that cash_inserted or change use SUPPORTED_DENOMINATIONS
+    
     change = cash_inserted - item.price
     item.quantity -= 1
-    item.slot.current_item_count -= 1
+    if item.slot:
+        item.slot.current_item_count -= 1
+    
     db.commit()
     db.refresh(item)
+    
     return {
         "item": item.name,
         "price": item.price,
